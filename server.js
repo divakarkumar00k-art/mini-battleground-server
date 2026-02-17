@@ -17,7 +17,12 @@ const MAX_PLAYERS_PER_ROOM = 20;
 
 let rooms = {
   room1: {
-    players: {}
+    players: {},
+    zone: {
+      centerX: 500,
+      centerY: 500,
+      radius: 500
+    }
   }
 };
 
@@ -33,6 +38,41 @@ function broadcastToRoom(roomId, data) {
   });
 }
 
+// Zone shrink every 10 seconds
+setInterval(() => {
+  const room = rooms["room1"];
+
+  if (room.zone.radius > 50) {
+    room.zone.radius -= 20;
+
+    broadcastToRoom("room1", {
+      type: "zoneUpdate",
+      radius: room.zone.radius
+    });
+  }
+
+  // Zone damage
+  Object.values(room.players).forEach(player => {
+    if (player.health <= 0) return;
+
+    const dx = player.x - room.zone.centerX;
+    const dy = player.y - room.zone.centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > room.zone.radius) {
+      player.health -= 5;
+      if (player.health < 0) player.health = 0;
+
+      broadcastToRoom("room1", {
+        type: "zoneDamage",
+        playerId: player.id,
+        health: player.health
+      });
+    }
+  });
+
+}, 10000);
+
 wss.on("connection", (ws) => {
   const playerId = generateId();
   const roomId = "room1";
@@ -46,7 +86,6 @@ wss.on("connection", (ws) => {
   rooms[roomId].players[playerId] = {
     id: playerId,
     ws: ws,
-    username: null,
     x: 0,
     y: 0,
     health: 100,
@@ -58,7 +97,8 @@ wss.on("connection", (ws) => {
     playerId,
     roomId,
     health: 100,
-    kills: 0
+    kills: 0,
+    zone: rooms[roomId].zone
   }));
 
   broadcastToRoom(roomId, {
@@ -70,7 +110,6 @@ wss.on("connection", (ws) => {
     try {
       const data = JSON.parse(message);
 
-      // Movement
       if (data.type === "move") {
         rooms[roomId].players[playerId].x = data.x;
         rooms[roomId].players[playerId].y = data.y;
@@ -83,13 +122,11 @@ wss.on("connection", (ws) => {
         });
       }
 
-      // Shooting
       if (data.type === "shoot") {
         const target = rooms[roomId].players[data.targetId];
 
         if (target && target.health > 0) {
           target.health -= data.damage;
-
           if (target.health < 0) target.health = 0;
 
           broadcastToRoom(roomId, {
@@ -98,9 +135,7 @@ wss.on("connection", (ws) => {
             health: target.health
           });
 
-          // If player dies
           if (target.health === 0) {
-
             rooms[roomId].players[playerId].kills += 1;
 
             broadcastToRoom(roomId, {
@@ -111,7 +146,7 @@ wss.on("connection", (ws) => {
 
             broadcastToRoom(roomId, {
               type: "killUpdate",
-              playerId: playerId,
+              playerId,
               kills: rooms[roomId].players[playerId].kills
             });
 
