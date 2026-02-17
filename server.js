@@ -7,54 +7,25 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-let players = {};
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
 
+// WebSocket
 wss.on("connection", (ws) => {
-  const playerId = Math.random().toString(36).substr(2, 9);
+  console.log("Player connected");
 
-  players[playerId] = { x: 200, y: 200, health: 100 };
-
-  ws.send(JSON.stringify({
-    type: "welcome",
-    playerId,
-    health: 100
-  }));
-
-  broadcast({ type: "aliveCount", total: Object.keys(players).length });
+  ws.send(JSON.stringify({ type: "welcome" }));
 
   ws.on("message", (message) => {
-    const data = JSON.parse(message);
-
-    if (data.type === "move") {
-      players[playerId].x = data.x;
-      players[playerId].y = data.y;
-
-      broadcast({
-        type: "playerMove",
-        playerId,
-        x: data.x,
-        y: data.y
-      });
-    }
-  });
-
-  ws.on("close", () => {
-    delete players[playerId];
-    broadcast({ type: "aliveCount", total: Object.keys(players).length });
+    console.log("Received:", message.toString());
   });
 });
 
-function broadcast(data) {
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
-    }
-  });
-}
-
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log("Server running on port", PORT);
 });
