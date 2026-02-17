@@ -1,28 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Mini Battleground</title>
+    <meta charset="UTF-8">
+    <title>Mini Battleground</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://cdn.jsdelivr.net/npm/phaser@3/dist /phaser.js"></script
-
-<style>
-body {
-    margin: 0;
-    overflow: hidden;
-    background: black;
-}
-canvas {
-    display: block;
-}
-</style>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+    </style>
 </head>
 <body>
 
+<!-- Phaser CDN FIRST -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+
+<!-- Scenes -->
 <script src="scenes/LoginScene.js"></script>
 <script src="scenes/LobbyScene.js"></script>
 <script src="scenes/MatchScene.js"></script>
+
+<!-- Game config LAST -->
 <script src="game.js"></script>
 
 </body>
