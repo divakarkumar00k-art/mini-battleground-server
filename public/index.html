@@ -1,117 +1,190 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mini Battleground</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #1b5e20;
-    }
-    canvas {
-      display: block;
-    }
-    #ui {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      color: white;
-      font-family: Arial;
-      font-size: 18px;
-    }
-  </style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>Mini Battleground</title>
+
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #2e6b2e;
+  font-family: Arial;
+}
+
+#gameCanvas {
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  color: white;
+  font-size: 14px;
+}
+
+#joystickContainer {
+  position: fixed;
+  bottom: 30px;
+  left: 20px;
+  width: 110px;
+  height: 110px;
+}
+
+#joystickBase {
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.15);
+  border-radius: 50%;
+  position: relative;
+  touch-action: none;
+}
+
+#joystickStick {
+  width: 45px;
+  height: 45px;
+  background: rgba(0,0,255,0.7);
+  border-radius: 50%;
+  position: absolute;
+  left: 32px;
+  top: 32px;
+}
+</style>
 </head>
+
 <body>
 
+<canvas id="gameCanvas"></canvas>
+
 <div id="ui">
-  Alive: <span id="alive">0</span><br>
-  Kills: <span id="kills">0</span><br>
-  Health: <span id="health">100</span>
+  <div>Alive: <span id="alive">1</span></div>
+  <div>Kills: <span id="kills">0</span></div>
+  <div>Health: <span id="health">100</span></div>
 </div>
 
-<canvas id="game"></canvas>
+<div id="joystickContainer">
+  <div id="joystickBase">
+    <div id="joystickStick"></div>
+  </div>
+</div>
 
 <script>
-const canvas = document.getElementById("game");
+const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let player = { x: 200, y: 200 };
+let player = { x: canvas.width/2, y: canvas.height/2 };
 let players = {};
-let alive = 0;
 let kills = 0;
 let health = 100;
+let alive = 1;
 
-const ws = new WebSocket("wss://mini-battleground-server-production.up.railway.app");
+const socket = new WebSocket("wss://mini-battleground-server-production.up.railway.app");
 
-ws.onmessage = (msg) => {
-  const data = JSON.parse(msg.data);
-
-  if (data.type === "welcome") {
-    player.id = data.playerId;
-    health = data.health;
-  }
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
 
   if (data.type === "playerMove") {
     players[data.playerId] = { x: data.x, y: data.y };
   }
 
-  if (data.type === "aliveCount") {
+  if (data.type === "playerCount") {
     alive = data.total;
+    document.getElementById("alive").innerText = alive;
   }
 
   if (data.type === "killUpdate") {
-    if (data.playerId === player.id) {
-      kills = data.kills;
-    }
+    kills = data.kills;
+    document.getElementById("kills").innerText = kills;
   }
 
   if (data.type === "playerHit") {
-    if (data.targetId === player.id) {
-      health = data.health;
-    }
+    health = data.health;
+    document.getElementById("health").innerText = health;
   }
 };
 
-document.addEventListener("touchmove", (e) => {
-  const touch = e.touches[0];
-  player.x = touch.clientX;
-  player.y = touch.clientY;
-
-  ws.send(JSON.stringify({
-    type: "move",
-    x: player.x,
-    y: player.y
-  }));
-});
-
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Player
+  // draw self
   ctx.fillStyle = "blue";
   ctx.beginPath();
-  ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+  ctx.arc(player.x, player.y, 15, 0, Math.PI*2);
   ctx.fill();
 
-  // Other players
+  // draw other players
   ctx.fillStyle = "red";
   for (let id in players) {
     ctx.beginPath();
-    ctx.arc(players[id].x, players[id].y, 20, 0, Math.PI * 2);
+    ctx.arc(players[id].x, players[id].y, 15, 0, Math.PI*2);
     ctx.fill();
   }
 
-  document.getElementById("alive").innerText = alive;
-  document.getElementById("kills").innerText = kills;
-  document.getElementById("health").innerText = health;
-
   requestAnimationFrame(draw);
 }
-
 draw();
+
+
+// JOYSTICK
+const base = document.getElementById("joystickBase");
+const stick = document.getElementById("joystickStick");
+
+let dragging = false;
+let currentX = 0;
+let currentY = 0;
+let moveInterval = null;
+let maxDistance = 40;
+
+base.addEventListener("touchstart", () => {
+  dragging = true;
+
+  moveInterval = setInterval(() => {
+    if (!dragging) return;
+
+    player.x += currentX * 0.1;
+    player.y += currentY * 0.1;
+
+    socket.send(JSON.stringify({
+      type: "move",
+      x: player.x,
+      y: player.y
+    }));
+  }, 50);
+});
+
+base.addEventListener("touchend", () => {
+  dragging = false;
+  clearInterval(moveInterval);
+  stick.style.left = "32px";
+  stick.style.top = "32px";
+});
+
+base.addEventListener("touchmove", (e) => {
+  if (!dragging) return;
+
+  const rect = base.getBoundingClientRect();
+  const touch = e.touches[0];
+
+  let x = touch.clientX - rect.left - 55;
+  let y = touch.clientY - rect.top - 55;
+
+  const distance = Math.sqrt(x*x + y*y);
+
+  if (distance > maxDistance) {
+    x = (x / distance) * maxDistance;
+    y = (y / distance) * maxDistance;
+  }
+
+  currentX = x;
+  currentY = y;
+
+  stick.style.left = 32 + x + "px";
+  stick.style.top = 32 + y + "px";
+});
 </script>
 
 </body>
