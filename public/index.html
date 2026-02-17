@@ -12,7 +12,7 @@ body {
   font-family: Arial;
 }
 
-#gameCanvas {
+canvas {
   display: block;
 }
 
@@ -50,6 +50,21 @@ body {
   left: 32px;
   top: 32px;
 }
+
+#fireButton {
+  position: fixed;
+  bottom: 50px;
+  right: 40px;
+  width: 90px;
+  height: 90px;
+  background: rgba(255,0,0,0.7);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-weight: bold;
+}
 </style>
 </head>
 
@@ -69,6 +84,8 @@ body {
   </div>
 </div>
 
+<div id="fireButton">FIRE</div>
+
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -76,11 +93,11 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let player = { x: canvas.width/2, y: canvas.height/2 };
+let player = { x: canvas.width/2, y: canvas.height/2, dirX:1, dirY:0 };
 let players = {};
+let bullets = [];
 let kills = 0;
 let health = 100;
-let alive = 1;
 
 const socket = new WebSocket("wss://mini-battleground-server-production.up.railway.app");
 
@@ -91,9 +108,9 @@ socket.onmessage = (event) => {
     players[data.playerId] = { x: data.x, y: data.y };
   }
 
-  if (data.type === "playerCount") {
-    alive = data.total;
-    document.getElementById("alive").innerText = alive;
+  if (data.type === "playerHit") {
+    health = data.health;
+    document.getElementById("health").innerText = health;
   }
 
   if (data.type === "killUpdate") {
@@ -101,33 +118,70 @@ socket.onmessage = (event) => {
     document.getElementById("kills").innerText = kills;
   }
 
-  if (data.type === "playerHit") {
-    health = data.health;
-    document.getElementById("health").innerText = health;
+  if (data.type === "playerCount") {
+    document.getElementById("alive").innerText = data.total;
   }
 };
 
-function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+function drawPlayer(p, isSelf=false) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
 
-  // draw self
-  ctx.fillStyle = "blue";
+  let angle = Math.atan2(p.dirY || 0, p.dirX || 1);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = isSelf ? "#2b6cff" : "#ff3b3b";
+  ctx.fillRect(-12, -15, 24, 30);
+
+  ctx.fillStyle = "#ffd6a5";
   ctx.beginPath();
-  ctx.arc(player.x, player.y, 15, 0, Math.PI*2);
+  ctx.arc(0, -22, 8, 0, Math.PI*2);
   ctx.fill();
 
-  // draw other players
-  ctx.fillStyle = "red";
-  for (let id in players) {
+  ctx.fillStyle = "#333";
+  ctx.fillRect(-9, -28, 18, 6);
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(10, -3, 20, 6);
+
+  ctx.restore();
+}
+
+function drawBullets() {
+  ctx.fillStyle = "yellow";
+  bullets.forEach(b => {
     ctx.beginPath();
-    ctx.arc(players[id].x, players[id].y, 15, 0, Math.PI*2);
+    ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
     ctx.fill();
+  });
+}
+
+function updateBullets() {
+  bullets.forEach(b => {
+    b.x += b.vx;
+    b.y += b.vy;
+  });
+  bullets = bullets.filter(b =>
+    b.x > 0 && b.x < canvas.width &&
+    b.y > 0 && b.y < canvas.height
+  );
+}
+
+function gameLoop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  updateBullets();
+  drawBullets();
+
+  drawPlayer(player, true);
+
+  for (let id in players) {
+    drawPlayer(players[id], false);
   }
 
-  requestAnimationFrame(draw);
+  requestAnimationFrame(gameLoop);
 }
-draw();
-
+gameLoop();
 
 // JOYSTICK
 const base = document.getElementById("joystickBase");
@@ -147,6 +201,9 @@ base.addEventListener("touchstart", () => {
 
     player.x += currentX * 0.1;
     player.y += currentY * 0.1;
+
+    player.dirX = currentX;
+    player.dirY = currentY;
 
     socket.send(JSON.stringify({
       type: "move",
@@ -184,6 +241,23 @@ base.addEventListener("touchmove", (e) => {
 
   stick.style.left = 32 + x + "px";
   stick.style.top = 32 + y + "px";
+});
+
+// FIRE
+const fireButton = document.getElementById("fireButton");
+
+fireButton.addEventListener("touchstart", () => {
+
+  let angle = Math.atan2(player.dirY, player.dirX);
+  let speed = 8;
+
+  bullets.push({
+    x: player.x,
+    y: player.y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed
+  });
+
 });
 </script>
 
