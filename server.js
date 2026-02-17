@@ -18,6 +18,7 @@ const MAX_PLAYERS_PER_ROOM = 20;
 let rooms = {
   room1: {
     players: {},
+    matchEnded: false,
     zone: {
       centerX: 500,
       centerY: 500,
@@ -38,9 +39,24 @@ function broadcastToRoom(roomId, data) {
   });
 }
 
-// Zone shrink every 10 seconds
+function checkWinner(roomId) {
+  const alivePlayers = Object.values(rooms[roomId].players)
+    .filter(p => p.health > 0);
+
+  if (alivePlayers.length === 1 && !rooms[roomId].matchEnded) {
+    rooms[roomId].matchEnded = true;
+
+    broadcastToRoom(roomId, {
+      type: "matchEnd",
+      winnerId: alivePlayers[0].id
+    });
+  }
+}
+
+// Zone system
 setInterval(() => {
   const room = rooms["room1"];
+  if (room.matchEnded) return;
 
   if (room.zone.radius > 50) {
     room.zone.radius -= 20;
@@ -51,7 +67,6 @@ setInterval(() => {
     });
   }
 
-  // Zone damage
   Object.values(room.players).forEach(player => {
     if (player.health <= 0) return;
 
@@ -68,6 +83,16 @@ setInterval(() => {
         playerId: player.id,
         health: player.health
       });
+
+      if (player.health === 0) {
+        broadcastToRoom("room1", {
+          type: "playerDead",
+          targetId: player.id,
+          killerId: "zone"
+        });
+
+        checkWinner("room1");
+      }
     }
   });
 
@@ -109,10 +134,13 @@ wss.on("connection", (ws) => {
   ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
+      const room = rooms[roomId];
+
+      if (room.matchEnded) return;
 
       if (data.type === "move") {
-        rooms[roomId].players[playerId].x = data.x;
-        rooms[roomId].players[playerId].y = data.y;
+        room.players[playerId].x = data.x;
+        room.players[playerId].y = data.y;
 
         broadcastToRoom(roomId, {
           type: "playerMove",
@@ -123,7 +151,7 @@ wss.on("connection", (ws) => {
       }
 
       if (data.type === "shoot") {
-        const target = rooms[roomId].players[data.targetId];
+        const target = room.players[data.targetId];
 
         if (target && target.health > 0) {
           target.health -= data.damage;
@@ -136,7 +164,8 @@ wss.on("connection", (ws) => {
           });
 
           if (target.health === 0) {
-            rooms[roomId].players[playerId].kills += 1;
+
+            room.players[playerId].kills += 1;
 
             broadcastToRoom(roomId, {
               type: "playerDead",
@@ -147,14 +176,16 @@ wss.on("connection", (ws) => {
             broadcastToRoom(roomId, {
               type: "killUpdate",
               playerId,
-              kills: rooms[roomId].players[playerId].kills
+              kills: room.players[playerId].kills
             });
 
             broadcastToRoom(roomId, {
               type: "aliveCount",
-              total: Object.values(rooms[roomId].players)
+              total: Object.values(room.players)
                 .filter(p => p.health > 0).length
             });
+
+            checkWinner(roomId);
           }
         }
       }
