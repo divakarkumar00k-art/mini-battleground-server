@@ -1,202 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Mini Battleground</title>
+  <meta charset="UTF-8" />
+  <title>Mini Battleground</title>
 
-<style>
-body {
-  margin: 0;
-  overflow: hidden;
-  background: #2e6b2e;
-  font-family: Arial;
-}
+  <!-- Phaser CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 
-canvas { display: block; }
+  <!-- Firebase CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
 
-#ui {
-  position: fixed;
-  top: 10px;
-  right: 20px;
-  color: white;
-  font-size: 15px;
-}
-
-#ammo {
-  font-size: 18px;
-  font-weight: bold;
-}
-
-#reloadBtn {
-  position: fixed;
-  bottom: 170px;
-  right: 60px;
-  width: 80px;
-  height: 50px;
-  background: rgba(0,0,0,0.6);
-  color: white;
-  border-radius: 10px;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-
-#fireButton {
-  position: fixed;
-  bottom: 60px;
-  right: 60px;
-  width: 100px;
-  height: 100px;
-  background: rgba(255,0,0,0.8);
-  border-radius: 50%;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  color:white;
-  font-weight:bold;
-}
-
-#damageFlash {
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  background: red;
-  opacity: 0;
-  pointer-events:none;
-}
-
-</style>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+  </style>
 </head>
-
 <body>
 
-<canvas id="gameCanvas"></canvas>
-
-<div id="damageFlash"></div>
-
-<div id="ui">
-  Alive: <span id="alive">1</span><br>
-  Kills: <span id="kills">0</span><br>
-  Health: <span id="health">100</span><br>
-  <div id="ammo">Ammo: <span id="ammoCount">40</span>/40</div>
-</div>
-
-<div id="reloadBtn">RELOAD</div>
-<div id="fireButton">FIRE</div>
-
-<script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-let player = { x: canvas.width/2, y: canvas.height/2, dirX:1, dirY:0 };
-let bullets = [];
-let ammo = 40;
-let maxAmmo = 40;
-let reloading = false;
-let fireCooldown = false;
-
-function drawPlayer() {
-  ctx.save();
-  ctx.translate(player.x, player.y);
-  let angle = Math.atan2(player.dirY, player.dirX);
-  ctx.rotate(angle);
-
-  ctx.fillStyle = "#2b6cff";
-  ctx.fillRect(-12, -15, 24, 30);
-
-  ctx.fillStyle = "#ffd6a5";
-  ctx.beginPath();
-  ctx.arc(0, -22, 8, 0, Math.PI*2);
-  ctx.fill();
-
-  ctx.fillStyle = "#111";
-  ctx.fillRect(10, -3, 25, 6);
-
-  ctx.restore();
-}
-
-function drawBullets() {
-  ctx.fillStyle = "yellow";
-  bullets.forEach(b=>{
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
-    ctx.fill();
-  });
-}
-
-function updateBullets() {
-  bullets.forEach(b=>{
-    b.x+=b.vx;
-    b.y+=b.vy;
-  });
-  bullets = bullets.filter(b=> b.x>0 && b.x<canvas.width && b.y>0 && b.y<canvas.height);
-}
-
-function loop(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  updateBullets();
-  drawBullets();
-  drawPlayer();
-  requestAnimationFrame(loop);
-}
-loop();
-
-function muzzleFlash(){
-  ctx.fillStyle="orange";
-  ctx.beginPath();
-  ctx.arc(player.x + player.dirX*25, player.y + player.dirY*25, 6, 0, Math.PI*2);
-  ctx.fill();
-}
-
-function recoil(){
-  player.x -= player.dirX*3;
-  player.y -= player.dirY*3;
-}
-
-document.getElementById("fireButton").addEventListener("touchstart", ()=>{
-  if(fireCooldown || reloading) return;
-  if(ammo<=0) return;
-
-  ammo--;
-  document.getElementById("ammoCount").innerText=ammo;
-
-  let angle=Math.atan2(player.dirY, player.dirX);
-
-  bullets.push({
-    x:player.x,
-    y:player.y,
-    vx:Math.cos(angle)*10,
-    vy:Math.sin(angle)*10
-  });
-
-  recoil();
-  muzzleFlash();
-
-  fireCooldown=true;
-  setTimeout(()=>fireCooldown=false,150);
-});
-
-document.getElementById("reloadBtn").addEventListener("touchstart", ()=>{
-  if(reloading || ammo===maxAmmo) return;
-  reloading=true;
-  document.getElementById("reloadBtn").innerText="Reloading...";
-
-  setTimeout(()=>{
-    ammo=maxAmmo;
-    document.getElementById("ammoCount").innerText=ammo;
-    reloading=false;
-    document.getElementById("reloadBtn").innerText="RELOAD";
-  },1500);
-});
-
-function damageEffect(){
-  const flash=document.getElementById("damageFlash");
-  flash.style.opacity=0.4;
-  setTimeout(()=>flash.style.opacity=0,100);
-}
-</script>
+<script type="module" src="game.js"></script>
 
 </body>
 </html>
