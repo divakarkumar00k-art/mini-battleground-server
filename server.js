@@ -7,22 +7,18 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Serve frontend
+// ✅ Serve public folder
 app.use(express.static(path.join(__dirname, "public")));
 
+// Root check
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-// WebSocket
+// Basic WebSocket
 wss.on("connection", (ws) => {
   console.log("Player connected");
-
   ws.send(JSON.stringify({ type: "welcome" }));
-
-  ws.on("message", (message) => {
-    console.log("Received:", message.toString());
-  });
 });
 
 const PORT = process.env.PORT || 8080;
