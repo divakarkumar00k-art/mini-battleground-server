@@ -15,7 +15,6 @@ const wss = new WebSocket.Server({ server });
 
 const MAX_PLAYERS_PER_ROOM = 20;
 
-// Room structure
 let rooms = {
   room1: {
     players: {}
@@ -26,7 +25,6 @@ function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
 
-// Broadcast only to a specific room
 function broadcastToRoom(roomId, data) {
   Object.values(rooms[roomId].players).forEach(player => {
     if (player.ws.readyState === WebSocket.OPEN) {
@@ -39,28 +37,26 @@ wss.on("connection", (ws) => {
   const playerId = generateId();
   const roomId = "room1";
 
-  // Room full check
   if (Object.keys(rooms[roomId].players).length >= MAX_PLAYERS_PER_ROOM) {
-    ws.send(JSON.stringify({
-      type: "roomFull"
-    }));
+    ws.send(JSON.stringify({ type: "roomFull" }));
     ws.close();
     return;
   }
 
-  // Add player to room
   rooms[roomId].players[playerId] = {
     id: playerId,
     ws: ws,
-    username: null
+    username: null,
+    x: 0,
+    y: 0
   };
 
   console.log(`Player ${playerId} joined ${roomId}`);
 
   ws.send(JSON.stringify({
     type: "welcome",
-    playerId: playerId,
-    roomId: roomId
+    playerId,
+    roomId
   }));
 
   broadcastToRoom(roomId, {
@@ -74,7 +70,18 @@ wss.on("connection", (ws) => {
 
       if (data.type === "join") {
         rooms[roomId].players[playerId].username = data.username;
-        console.log("Username set:", data.username);
+      }
+
+      if (data.type === "move") {
+        rooms[roomId].players[playerId].x = data.x;
+        rooms[roomId].players[playerId].y = data.y;
+
+        broadcastToRoom(roomId, {
+          type: "playerMove",
+          playerId,
+          x: data.x,
+          y: data.y
+        });
       }
 
     } catch (err) {
@@ -84,12 +91,13 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     delete rooms[roomId].players[playerId];
-    console.log(`Player ${playerId} left ${roomId}`);
 
     broadcastToRoom(roomId, {
       type: "playerCount",
       total: Object.keys(rooms[roomId].players).length
     });
+
+    console.log(`Player ${playerId} left ${roomId}`);
   });
 });
 
