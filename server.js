@@ -13,34 +13,59 @@ app.get("/", (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-let players = {};
+const MAX_PLAYERS_PER_ROOM = 20;
+
+// Room structure
+let rooms = {
+  room1: {
+    players: {}
+  }
+};
 
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
 
-function broadcast(data) {
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
+// Broadcast only to a specific room
+function broadcastToRoom(roomId, data) {
+  Object.values(rooms[roomId].players).forEach(player => {
+    if (player.ws.readyState === WebSocket.OPEN) {
+      player.ws.send(JSON.stringify(data));
     }
   });
 }
 
 wss.on("connection", (ws) => {
   const playerId = generateId();
-  players[playerId] = { id: playerId };
+  const roomId = "room1";
 
-  console.log("Player connected:", playerId);
+  // Room full check
+  if (Object.keys(rooms[roomId].players).length >= MAX_PLAYERS_PER_ROOM) {
+    ws.send(JSON.stringify({
+      type: "roomFull"
+    }));
+    ws.close();
+    return;
+  }
+
+  // Add player to room
+  rooms[roomId].players[playerId] = {
+    id: playerId,
+    ws: ws,
+    username: null
+  };
+
+  console.log(`Player ${playerId} joined ${roomId}`);
 
   ws.send(JSON.stringify({
     type: "welcome",
-    playerId: playerId
+    playerId: playerId,
+    roomId: roomId
   }));
 
-  broadcast({
+  broadcastToRoom(roomId, {
     type: "playerCount",
-    total: Object.keys(players).length
+    total: Object.keys(rooms[roomId].players).length
   });
 
   ws.on("message", (message) => {
@@ -48,22 +73,22 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(message);
 
       if (data.type === "join") {
-        players[playerId].username = data.username;
-        console.log("Player joined as:", data.username);
+        rooms[roomId].players[playerId].username = data.username;
+        console.log("Username set:", data.username);
       }
 
     } catch (err) {
-      console.log("Invalid message received");
+      console.log("Invalid message");
     }
   });
 
   ws.on("close", () => {
-    delete players[playerId];
-    console.log("Player disconnected:", playerId);
+    delete rooms[roomId].players[playerId];
+    console.log(`Player ${playerId} left ${roomId}`);
 
-    broadcast({
+    broadcastToRoom(roomId, {
       type: "playerCount",
-      total: Object.keys(players).length
+      total: Object.keys(rooms[roomId].players).length
     });
   });
 });
