@@ -49,18 +49,20 @@ wss.on("connection", (ws) => {
     username: null,
     x: 0,
     y: 0,
-    health: 100
+    health: 100,
+    kills: 0
   };
 
   ws.send(JSON.stringify({
     type: "welcome",
     playerId,
     roomId,
-    health: 100
+    health: 100,
+    kills: 0
   }));
 
   broadcastToRoom(roomId, {
-    type: "playerCount",
+    type: "aliveCount",
     total: Object.keys(rooms[roomId].players).length
   });
 
@@ -96,10 +98,27 @@ wss.on("connection", (ws) => {
             health: target.health
           });
 
+          // If player dies
           if (target.health === 0) {
+
+            rooms[roomId].players[playerId].kills += 1;
+
             broadcastToRoom(roomId, {
               type: "playerDead",
-              targetId: data.targetId
+              targetId: data.targetId,
+              killerId: playerId
+            });
+
+            broadcastToRoom(roomId, {
+              type: "killUpdate",
+              playerId: playerId,
+              kills: rooms[roomId].players[playerId].kills
+            });
+
+            broadcastToRoom(roomId, {
+              type: "aliveCount",
+              total: Object.values(rooms[roomId].players)
+                .filter(p => p.health > 0).length
             });
           }
         }
@@ -114,7 +133,7 @@ wss.on("connection", (ws) => {
     delete rooms[roomId].players[playerId];
 
     broadcastToRoom(roomId, {
-      type: "playerCount",
+      type: "aliveCount",
       total: Object.keys(rooms[roomId].players).length
     });
   });
