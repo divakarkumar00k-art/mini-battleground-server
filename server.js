@@ -48,15 +48,15 @@ wss.on("connection", (ws) => {
     ws: ws,
     username: null,
     x: 0,
-    y: 0
+    y: 0,
+    health: 100
   };
-
-  console.log(`Player ${playerId} joined ${roomId}`);
 
   ws.send(JSON.stringify({
     type: "welcome",
     playerId,
-    roomId
+    roomId,
+    health: 100
   }));
 
   broadcastToRoom(roomId, {
@@ -68,10 +68,7 @@ wss.on("connection", (ws) => {
     try {
       const data = JSON.parse(message);
 
-      if (data.type === "join") {
-        rooms[roomId].players[playerId].username = data.username;
-      }
-
+      // Movement
       if (data.type === "move") {
         rooms[roomId].players[playerId].x = data.x;
         rooms[roomId].players[playerId].y = data.y;
@@ -82,6 +79,30 @@ wss.on("connection", (ws) => {
           x: data.x,
           y: data.y
         });
+      }
+
+      // Shooting
+      if (data.type === "shoot") {
+        const target = rooms[roomId].players[data.targetId];
+
+        if (target && target.health > 0) {
+          target.health -= data.damage;
+
+          if (target.health < 0) target.health = 0;
+
+          broadcastToRoom(roomId, {
+            type: "playerHit",
+            targetId: data.targetId,
+            health: target.health
+          });
+
+          if (target.health === 0) {
+            broadcastToRoom(roomId, {
+              type: "playerDead",
+              targetId: data.targetId
+            });
+          }
+        }
       }
 
     } catch (err) {
@@ -96,8 +117,6 @@ wss.on("connection", (ws) => {
       type: "playerCount",
       total: Object.keys(rooms[roomId].players).length
     });
-
-    console.log(`Player ${playerId} left ${roomId}`);
   });
 });
 
